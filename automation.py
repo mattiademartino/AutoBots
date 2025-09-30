@@ -6,10 +6,6 @@ DISTANCE_THRESHOLD = 100  # mm - if an object is closer than 100mm to the sensor
 GRABBING_SPEED = 50
 DRIVE_SPEED = 60
 
-# --------------------------
-# HELPER FUNCTIONS
-# --------------------------
-
 def grab_cube():
     """Pre-given function that spins the motors in a certain speed"""
     """Assuming motors 1 and 2 are on the side that grabs the box"""
@@ -63,7 +59,7 @@ def autonomous_run():
         dist = get_distance()
         if dist > 0 and dist < DISTANCE_THRESHOLD:
             color = get_color()
-            
+
             print("Cube detected, color:", color)
 
             grab_cube()
