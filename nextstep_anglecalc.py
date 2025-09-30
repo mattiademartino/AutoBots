@@ -6,10 +6,6 @@ def _theta_rel_modeB_mirrored(l1: float, l2: float, x: float) -> float:
     This is the internal triangle angle at the joint between sides (l1, x).
     Returns radians.
     """
-    if l1 <= 0 or l2 <= 0:
-        raise ValueError("Link lengths l1 and l2 must be positive.")
-    if x <= 0:
-        raise ValueError("Along-rail length x must be positive.")
 
     # Triangle existence: sides (l1, l2, x)
     if not (abs(l1 - l2) <= x <= (l1 + l2)):
