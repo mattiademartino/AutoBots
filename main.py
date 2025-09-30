@@ -23,8 +23,6 @@ motor_2 = None
 motor_3 = None
 motor_4 = None
 
-#test
-
 # SETUP
 def setup():
     global touch_sensor, optical_sensor, distance_sensor, bumper_sensor, motor_1, motor_2, motor_3, motor_4
