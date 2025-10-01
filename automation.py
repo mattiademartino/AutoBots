@@ -3,10 +3,10 @@ from vex import *
 from functions import *
 
 # PARAMETERS
-DISTANCE_THRESHOLD = 50   # mm
-DRIVE_SPEED = 40
-GRAB_SPEED = 50
-SLOT_DISTANCE_DEGREES = 360
+DISTANCE_THRESHOLD = 400   # mm
+DRIVE_SPEED = 40 # maybe more?
+GRAB_SPEED = 50 # maybe less?
+SLOT_DISTANCE_DEGREES = 360 # needs to be measured, how many rolls is each "cube" on the field
 RETURN_SPEED = 40
 MAX_RETRIES = 2
 
