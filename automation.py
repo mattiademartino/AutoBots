@@ -1,119 +1,97 @@
+# automation.py
 from vex import *
-from robot_test_lib import *
+from functions import *
 
-# -------- CONFIG (TUNE THESE) --------
-DISTANCE_THRESHOLD = 400   # mm: detection distance (distance is 40cm, i measured)
-PICKUP_APPROACH_SPEED = 30
-DRIVE_SPEED = 60
-GRABBING_SPEED = 50
+# PARAMETERS
+DISTANCE_THRESHOLD = 50   # mm
+DRIVE_SPEED = 40
+GRAB_SPEED = 50
+SLOT_DISTANCE_DEGREES = 360
+RETURN_SPEED = 40
+MAX_RETRIES = 2
 
-# Gripper angles (adjust for the mechanism)
-GRIP_OPEN_POS = 90
-GRIP_CLOSED_POS = 0
+# --------- Gripper ---------
+def grab_cube():
+    print("Grabbing cube...")
+    spin_motor(motor_1, GRAB_SPEED)
+    spin_motor(motor_2, GRAB_SPEED)
+    wait(500, MSEC)
+    stop_motor(motor_1)
+    stop_motor(motor_2)
 
-# Travel times to reach each zone (ms, need to measure on track)
-# Each rectangle advancement is 30cm, at the beginning and end it is 15 cm
-TIME_TO_GREEN = 2000
-TIME_TO_BLUE = 4000
-TIME_TO_RED = 6000
-TIME_BACK_TO_START = 6500   # time to reverse from red end all the way back
+def release_cube():
+    print("Releasing cube...")
+    spin_motor(motor_1, -GRAB_SPEED)
+    spin_motor(motor_2, -GRAB_SPEED)
+    wait(500, MSEC)
+    stop_motor(motor_1)
+    stop_motor(motor_2)
 
-SAMPLE_COLOR_COUNT = 3
+def grab_with_retry():
+    for attempt in range(1, MAX_RETRIES + 1):
+        grab_cube()
+        wait(200, MSEC)
+        if get_distance() > DISTANCE_THRESHOLD:
+            print(f"Grab successful on attempt {attempt}")
+            return True
+        else:
+            print(f"Grab failed on attempt {attempt}, retrying...")
+            release_cube()
+            wait(300, MSEC)
+    print("All grab attempts failed. Skipping cube.")
+    return False
 
-# -------- HELPERS --------
-def drive(speed):
-    spin_motor(motor_3, speed)
-    spin_motor(motor_4, speed)
-
-def stop_drive():
+# --------- Movement ---------
+def move_to_position(target_degrees, speed=DRIVE_SPEED):
+    motor_3.set_position(0, DEGREES)
+    motor_4.set_position(0, DEGREES)
+    while abs(motor_3.position(DEGREES)) < abs(target_degrees):
+        if target_degrees > 0:
+            spin_motor(motor_3, speed)
+            spin_motor(motor_4, speed)
+        else:
+            spin_motor(motor_3, -speed)
+            spin_motor(motor_4, -speed)
     stop_motor(motor_3)
     stop_motor(motor_4)
 
-def open_gripper():
-    spin_motor_to_position(motor_1, GRIP_OPEN_POS, GRABBING_SPEED)
-    wait(300, MSEC)
-    stop_motor(motor_1)
-
-def close_gripper():
-    spin_motor_to_position(motor_1, GRIP_CLOSED_POS, GRABBING_SPEED)
-    wait(300, MSEC)
-    stop_motor(motor_1)
-
-def sample_color():
-    counts = {"red":0,"green":0,"blue":0,"unknown":0}
-    for _ in range(SAMPLE_COLOR_COUNT):
-        c = str(get_color()).lower()
-        if "red" in c:
-            counts["red"] += 1
-        elif "green" in c:
-            counts["green"] += 1
-        elif "blue" in c:
-            counts["blue"] += 1
-        else:
-            counts["unknown"] += 1
-        wait(100, MSEC)
-    return max(counts, key=counts.get)
-
-def approach_and_grab():
-    print("Approaching cube...")
-    drive(PICKUP_APPROACH_SPEED)
-    while True:
-        d = get_distance()
-        if 0 < d <= 35:
-            break
-        wait(50, MSEC)
-    stop_drive()
-    close_gripper()
-    print("Cube grabbed!")
-
-def go_to_zone(color):
-    """Drive forward the right amount of time to reach the correct zone"""
-    if color == "green":
-        travel = TIME_TO_GREEN
-    elif color == "blue":
-        travel = TIME_TO_BLUE
-    elif color == "red":
-        travel = TIME_TO_RED
-    else:
-        # if unknown, default to blue zone
-        travel = TIME_TO_BLUE
-    print(f"Driving to {color} zone...")
-    drive(DRIVE_SPEED)
-    wait(travel, MSEC)
-    stop_drive()
-
-def place_cube():
-    print("Placing cube...")
-    open_gripper()
-    wait(500, MSEC)
-    close_gripper()
-    print("Cube placed!")
-
 def return_to_start():
     print("Returning to start...")
-    drive(-DRIVE_SPEED)
-    wait(TIME_BACK_TO_START, MSEC)
-    stop_drive()
-    print("Back at start!")
+    while not bumper_pressed():
+        spin_motor(motor_3, -RETURN_SPEED)
+        spin_motor(motor_4, -RETURN_SPEED)
+    stop_motor(motor_3)
+    stop_motor(motor_4)
 
-# -------- MAIN LOOP --------
+# --------- Sorting ---------
+def place_cube(color):
+    print("Placing cube:", color)
+    if color == "green":
+        move_to_position(-SLOT_DISTANCE_DEGREES, 40)
+    elif color == "red":
+        move_to_position(SLOT_DISTANCE_DEGREES, 40)
+    elif color == "blue":
+        print("Dropping cube into trash chute")
+    release_cube()
+    wait(300, MSEC)
+
+# --------- Autonomous ---------
 def autonomous_run():
     setup()
-    print("Autonomous run started!")
+    print("System ready")
 
     while True:
         dist = get_distance()
         if 0 < dist < DISTANCE_THRESHOLD:
-            color = sample_color()
-            print("Cube detected:", color)
-
-            approach_and_grab()
-            go_to_zone(color)
-            place_cube()
-            return_to_start()
-
+            color = get_color()
+            print(f"Cube detected, color: {color}, Distance: {dist}cm")
+            if grab_with_retry():
+                return_to_start()
+                place_cube(color)
+                return_to_start()
+            else:
+                print("Skipping cube after failed grabs.")
         else:
+            spin_motor(motor_3, DRIVE_SPEED)
+            spin_motor(motor_4, DRIVE_SPEED)
             wait(100, MSEC)
-
-if __name__ == "__main__":
-    autonomous_run()
