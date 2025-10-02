@@ -18,6 +18,7 @@ motor_ejecter = Motor(Ports.PORT7)
 motor_trolley = Motor(Ports.PORT8)
 distance_sensor = Distance(Ports.PORT4)
 bumper_sensor = Bumper(Ports.PORT10)
+optical_sensor = Optical(Ports.PORT12)
 
 # ALL in degrees, test dummy vals, distance from 0
 SLOT_BLUE_DEG = 1000
@@ -39,12 +40,6 @@ def setup():
     except:
         print("TouchLED Error")
 
-    try:
-        optical_sensor = Optical(SENSOR_OPTICAL_PORT)
-        print("Color OK")
-    except:
-        optical_sensor = None
-        print("Color Error")
 
 
 
@@ -269,7 +264,8 @@ def return_to_start():
 
 # --------- Sorting ---------
 def place_cube(color, rel_pos):
-    print("Placing cube:", color)
+    print("Placing cube:")
+    print(color)
     if color == "green":
         spin_motor_to_position(motor_trolley, SLOT_GREEN_DEG, 100)
     elif color == "red":
@@ -332,7 +328,11 @@ def autonomous_run():
     # cube detected, retrieve it
     if grab_cube(): # success
         # get color
+        print("cube aligned with cart")
+        
         color = get_color()
+        if color == "none":
+            print("no color detected")
 
         #print(f"Cube detected, color: {color}, Distance: {dist}mm")
         place_cube(color, rel_pos)
