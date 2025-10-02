@@ -5,7 +5,7 @@ import time
 brain = Brain()
 
 # PARAMETERS
-DISTANCE_THRESHOLD = 400   # mm
+DISTANCE_THRESHOLD = 300   # mm
 DRIVE_SPEED = 40 # maybe more?
 GRAB_SPEED = 60 # maybe less?
 SLOT_DISTANCE_DEGREES = 360 # needs to be measured, how many rolls is each "cube" on the field
@@ -13,16 +13,16 @@ RETURN_SPEED = 40
 MAX_RETRIES = 2
 
 # PORTS
-motor_gripper = Motor(Ports.PORT5)
+motor_gripper = Motor(Ports.PORT6)
 motor_ejecter = Motor(Ports.PORT7)
 motor_trolley = Motor(Ports.PORT8)
 distance_sensor = Distance(Ports.PORT4)
 bumper_sensor = Bumper(Ports.PORT10)
 
-# ALL in degrees, test dummy vals
-SLOT_BLUE_DEG = 400
-SLOT_RED_DEG = 1000
-SLOT_BLUE_DEG = 700
+# ALL in degrees, test dummy vals, distance from 0
+SLOT_BLUE_DEG = 1000
+SLOT_RED_DEG = 800
+SLOT_GREEN_DEG = 400
 DIST_TO_HARVESTING_SITE = 1500
 
 # ----------------- SETUP (already given) -----------------
@@ -207,13 +207,17 @@ def grab_cube():
     delta_time = 0
     success = True
     while get_distance() > 1:
-        spin_motor(motor_gripper, GRAB_SPEED)
+        print("retrieving cube")
+        print(get_distance())
+        spin_motor(motor_gripper, -GRAB_SPEED)
         delta_time = time.time() - start_time
         if delta_time > 6000:  # timeout after 4 seconds
             print("Timeout reached while grabbing cube.")
             success = False
             break
     spin_motor(motor_gripper, 0)
+    print("FINISHED GRABBING, SUCCESS:")
+    print(success)
     return success
     # think about error handling ######################
 
@@ -267,11 +271,11 @@ def return_to_start():
 def place_cube(color, rel_pos):
     print("Placing cube:", color)
     if color == "green":
-        spin_motor_to_position(motor_trolley, rel_pos + SLOT_GREEN_DEG, 80)
+        spin_motor_to_position(motor_trolley, SLOT_GREEN_DEG, 100)
     elif color == "red":
-        spin_motor_to_position(motor_trolley, rel_pos + SLOT_RED_DEG, 80)
+        spin_motor_to_position(motor_trolley, SLOT_RED_DEG, 100)
     elif color == "blue":
-        spin_motor_to_position(motor_trolley, rel_pos + SLOT_BLUE_DEG, 80)
+        spin_motor_to_position(motor_trolley, SLOT_BLUE_DEG, 100)
         print("Dropping cube into trash chute")
     release_cube()
     wait(300, MSEC)
@@ -303,12 +307,10 @@ def autonomous_run():
 
     spin_motor_to_position(motor_trolley, -rel_pos, 100) # move to mining area
     print("spinned_motor to first pos")
-    mov_step = 10
+    mov_step = 50
     # look for cube
     print("checking for cube...")
-    # debug
-    while not bumper_pressed():
-        time.sleep(0.05)
+
 
     while True:
         spin_motor_to_position(motor_trolley, -rel_pos - mov_step, 10)
@@ -321,7 +323,9 @@ def autonomous_run():
         if 0 < dist < DISTANCE_THRESHOLD:
             break
 
-    # debug
+    # move distance so cube is centered
+    spin_motor_to_position(motor_trolley, -rel_pos - 200, 100)
+
     while not bumper_pressed():
         time.sleep(0.05)
 
@@ -329,11 +333,15 @@ def autonomous_run():
     if grab_cube(): # success
         # get color
         color = get_color()
+
         #print(f"Cube detected, color: {color}, Distance: {dist}mm")
         place_cube(color, rel_pos)
 
     else: # failed
         print("Failed to grab cube, aborting mission.")
+    
+    # # move to sorting facility
+    # spin_motor_to_position(motor_trolley, DIST_TO_HARVESTING_SITE-1000,100)
     
 
         #     color = get_color()
