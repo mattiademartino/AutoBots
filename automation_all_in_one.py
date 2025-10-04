@@ -225,27 +225,28 @@ def release_gripper():
     print("moving gripper all the way in front")
     start_time = 0
     delta_time = 0
-    while delta_time < 4:
-        spin_motor(motor_gripper, -GRAB_SPEED)
+    while delta_time < 2.5:
+        spin_motor(motor_gripper, GRAB_SPEED)
         delta_time = time.time() - start_time
     # move all the way to the maximum
     spin_motor(motor_gripper, 0)
+    print("Gripper moved to end pos")
 
 
 
 def release_cube():
-    print("Releasing cube...")
-    start_time = time.time()
-    delta_t = 0
-    print(time.time())
+   # print("Releasing cube...")
+   # start_time = time.time()
+   # delta_t = 0
+   # print(time.time())
     # move gripper back to allow ejecter to eject cube
-    while delta_t < 2.5:
-        spin_motor(motor_gripper, GRAB_SPEED)
-        delta_t = time.time() - start_time
-    print(time.time())
+   # while delta_t < 2.5:
+   #     spin_motor(motor_gripper, GRAB_SPEED)
+   #     delta_t = time.time() - start_time
+   # print(time.time())
     
-    stop_motor(motor_gripper)
-    print("Gripper moved to end pos")
+   # stop_motor(motor_gripper)
+   # print("Gripper moved to end pos")
     print("ejecting cube")
     spin_motor_to_position(motor_ejecter,-500,-100)
     wait(500, MSEC)
@@ -347,6 +348,9 @@ def autonomous_run():
             color = get_color()
             if color == "none":
                 print("no color detected")
+
+            #release the gripper immediately after grabbing the cube
+            release_gripper()
 
             #print(f"Cube detected, color: {color}, Distance: {dist}mm")
             place_cube(color, absolute_pos)
