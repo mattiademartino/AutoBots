@@ -1,5 +1,6 @@
 # automation.py
 from vex import *
+from functions import *
 
 # PARAMETERS
 DISTANCE_THRESHOLD = 400   # mm
