@@ -16,15 +16,17 @@ MAX_RETRIES = 2
 motor_gripper = Motor(Ports.PORT6)
 motor_ejecter = Motor(Ports.PORT7)
 motor_trolley = Motor(Ports.PORT8)
+motor_thumb = Motor(Ports.PORT9)
 distance_sensor = Distance(Ports.PORT4)
 bumper_sensor = Bumper(Ports.PORT10)
 optical_sensor = Optical(Ports.PORT12)
+touch_sensor = Touchled(Ports.PORT11)
 
 # ALL in degrees, test dummy vals, distance from 0
-SLOT_BLUE_DEG = 1100
-SLOT_RED_DEG = 500
+SLOT_BLUE_DEG = 950
+SLOT_RED_DEG = 300
 SLOT_GREEN_DEG = 100
-DIST_TO_HARVESTING_SITE = 1500
+DIST_TO_HARVESTING_SITE = 1300
 
 # ----------------- SETUP (already given) -----------------
 def setup():
@@ -34,20 +36,11 @@ def setup():
     # PORTS
 
 
-    try:
-        touch_sensor = Touchled(SENSOR_TOUCH_PORT)
-        print("TouchLED OK")
-    except:
-        print("TouchLED Error")
-
-
-
-
-
 
     motor_gripper.position(DEGREES)
     motor_trolley.position(DEGREES)
     motor_ejecter.position(DEGREES)
+    motor_thumb.position(DEGREES)
 
 
 
@@ -158,6 +151,7 @@ def set_motor_torque(motor, torque_percent):
                 motor.set_torque(abs(torque_percent), PERCENT)
                 motor.spin(FORWARD)
             elif torque_percent < 0:
+                print("sett backwawrd torque")
                 motor.set_torque(abs(torque_percent), PERCENT)
                 motor.spin(REVERSE)
             else:
@@ -201,14 +195,15 @@ def grab_cube():
     start_time = time.time()
     delta_time = 0
     success = True
-    while get_distance() > 1:
+    while get_distance() > 14:
         print("retrieving cube")
         print(get_distance())
         spin_motor(motor_gripper, -GRAB_SPEED)
         delta_time = time.time() - start_time
+        time.sleep(0.07)
         if delta_time > 6:  # timeout after 6 seconds
             print("Timeout reached while grabbing cube.")
-            if get_distance() < 20: # tbd deal with error handling
+            if get_distance() < 25: # tbd deal with error handling
                 success = True
             else:
                 success = False
@@ -223,7 +218,7 @@ def grab_cube():
 
 def release_gripper():
     print("moving gripper all the way in front")
-    start_time = 0
+    start_time = time.time()
     delta_time = 0
     while delta_time < 2.5:
         spin_motor(motor_gripper, GRAB_SPEED)
@@ -247,6 +242,9 @@ def release_cube():
     
    # stop_motor(motor_gripper)
    # print("Gripper moved to end pos")
+    
+    open_thumb()
+    time.sleep(0.3)
     print("ejecting cube")
     spin_motor_to_position(motor_ejecter,-500,-100)
     wait(500, MSEC)
@@ -266,6 +264,28 @@ def grab_with_retry():
             wait(300, MSEC)
     print("All grab attempts failed. Skipping cube.")
     return False
+
+def open_thumb():
+    print("Opening thumb...")
+    set_motor_torque(motor_thumb, 0)
+    start_time = time.time()
+    delta_time = 0
+    while delta_time < 0.24:
+        spin_motor(motor_thumb, 60)
+        delta_time = time.time() - start_time
+    spin_motor(motor_thumb, 0)
+
+
+def close_thumb():
+
+    print("Closing thumb...")
+    start_time = time.time()
+    delta_time = 0
+    while delta_time < 1:
+        spin_motor(motor_thumb, -100)
+        delta_time = time.time() - start_time
+    set_motor_torque(motor_thumb, -100)
+    
 
 
 
@@ -288,6 +308,10 @@ def place_cube(color, absolute_pos):
     elif color == "blue":
         spin_motor_to_position(motor_trolley, -SLOT_BLUE_DEG, 100)
         print("Dropping cube into trash chute")
+    elif color == "none":
+        print("Unknown color, placing in trash chute")
+        spin_motor_to_position(motor_trolley, -SLOT_BLUE_DEG, 100)
+    
     release_cube()
     wait(300, MSEC)
 
@@ -317,68 +341,87 @@ def autonomous_run():
     absolute_pos = DIST_TO_HARVESTING_SITE
     start_time_run = time.time()
     passed_time = 0
+
     while passed_time < 600: # tbd more discrete timing
         spin_motor_to_position(motor_trolley, -absolute_pos, 100) # move to mining area
         print("spinned_motor to first pos")
-        mov_step = 50
+        mov_step = 75
         # look for cube
         print("checking for cube...")
 
-
-        while True: # add break point
+        time_out_time = 22
+        start_time_outtimer = time.time()
+        d_t = 0
+        success = False
+        while d_t < time_out_time: # add break point
             spin_motor_to_position(motor_trolley, -absolute_pos - mov_step, 10)
 
             dist = get_distance()
             print("Distance: ")
-
             print(dist)
+
             absolute_pos += mov_step
             if 0 < dist < DISTANCE_THRESHOLD:
+                success = True
                 break
-
+            d_t = time.time() - start_time_outtimer
+        if passed_time >= 590:
+            spin_motor(motor_trolley,0)
+            break
+        if not success:
+            while not bumper_pressed():
+                spin_motor(motor_trolley,100)
+                motor_trolley.set_position(0, DEGREES)
+            continue
         # move distance so cube is centered
-        spin_motor_to_position(motor_trolley, -absolute_pos - 180, 100)
+        spin_motor_to_position(motor_trolley, -absolute_pos - 150, 100) # old -180
 
+        if passed_time >= 590: # stop timing
+            spin_motor(motor_trolley,0)
 
         # cube detected, retrieve it
         if grab_cube(): # success
             # get color
             print("cube aligned with cart")
-            
+            set_color_sensor_led(True)
+            time.sleep(0.2)
             color = get_color()
-            if color == "none":
-                print("no color detected")
+            print(color)
+            ctr = 0
+            
+            if passed_time >= 590: # stop timing
+                spin_motor(motor_trolley,0)
+            while ctr < 5:
+                color_test = get_color()
+                ctr += 1
+                if color_test != color:
+                    ctr = 0
+                print(color_test)
+            color = color_test
+            set_color_sensor_led(False)
+            set_led(color)
 
             #release the gripper immediately after grabbing the cube
-            release_gripper()
 
+            release_gripper()
+            close_thumb()
+                
+            if passed_time >= 590: # stop timing
+                spin_motor(motor_trolley,0)
+            
             #print(f"Cube detected, color: {color}, Distance: {dist}mm")
+
             place_cube(color, absolute_pos)
+            set_led("off")
 
         else: # failed
             print("Failed to grab cube, aborting mission.")
         
         while not bumper_pressed():
-            spin_motor(motor_trolley,50)
+            spin_motor(motor_trolley,100)
         motor_trolley.set_position(0, DEGREES)
         passed_time = time.time() - start_time_run
 
-        # # move to sorting facility
-        # spin_motor_to_position(motor_trolley, DIST_TO_HARVESTING_SITE-1000,100)
-        
-
-            #     color = get_color()
-            #     print(f"Cube detected, color: {color}, Distance: {dist}cm")
-            #     if grab_with_retry():
-            #         return_to_start()
-            #         place_cube(color)
-            #         return_to_start()
-            #     else:
-            #         print("Skipping cube after failed grabs.")
-            # else:
-            #     spin_motor(motor_3, DRIVE_SPEED)
-            #     spin_motor(motor_4, DRIVE_SPEED)
-            #     wait(100, MSEC)
 
 
 autonomous_run()
