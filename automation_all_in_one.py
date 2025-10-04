@@ -294,7 +294,7 @@ def spin_motor_to_position(motor, position_degrees, speed_percent=50):
 
 # --------- Autonomous ---------
 def autonomous_run():
-    
+    # start system
     setup()
     print("System ready")
 
