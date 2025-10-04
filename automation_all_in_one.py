@@ -415,6 +415,7 @@ def autonomous_run():
             set_led("off")
 
         else: # failed
+            release_gripper()
             print("Failed to grab cube, aborting mission.")
         
         while not bumper_pressed():
