@@ -458,6 +458,31 @@ def spin_motor_to_position(motor, position_degrees, speed_percent=50):
             motor.spin_to_position(position_degrees, DEGREES, abs(speed_percent), PERCENT)
         except:
             pass
+
+def spin_motor_to_position_safe(motor, position_degrees, speed_percent=50):
+    """
+    Spins a motor to a specific position.
+    
+    Args:
+        motor: The motor object to control
+        position_degrees: Target position in degrees
+        speed_percent: Speed percentage (1-100, default 50)
+    """
+    if motor:
+        try:
+            motor.spin_to_position(position_degrees, DEGREES, abs(speed_percent), PERCENT,False)
+            max_t = 1
+            start = time.time()
+            while motor.is_spinning():
+                if time.time() - start > max_t:
+                    print("timeout reached, stopping motor")
+                    stop_motor(motor)
+                    return False
+                time.sleep(0.1)
+            return True
+        except:
+            pass
+
 def backup_error_function():
     print("###############")
     dist = get_distance()
@@ -509,7 +534,24 @@ def autonomous_run():
             if 0 < dist < DISTANCE_THRESHOLD:
                 success = True
                 break
-            spin_motor_to_position(motor_trolley, -absolute_pos - mov_step, 100)
+            fail_ctr = 0
+            print("absolute pos:")
+            print(absolute_pos)
+            while not spin_motor_to_position_safe(motor_trolley, -absolute_pos - mov_step -7, 100):
+                print("jammed trolley")
+                spin_motor(motor_trolley,100)
+                time.sleep(1)
+                spin_motor(motor_trolley,0)
+                absolute_pos += 7
+                if fail_ctr> 3:
+                    print("too many fails, aborting")
+                    while not bumper_pressed():
+                        spin_motor(motor_trolley,100)
+                    motor_trolley.set_position(0, DEGREES)
+                    passed_time = time.time() - start_time_run
+                    continue
+                fail_ctr += 1
+
 
             absolute_pos += mov_step
 
