@@ -5,12 +5,15 @@ import time
 brain = Brain()
 
 # PARAMETERS
-DISTANCE_THRESHOLD = 300   # mm
+DISTANCE_THRESHOLD = 320   # mm
 DRIVE_SPEED = 40 # maybe more?
 GRAB_SPEED = 60 # maybe less?
 SLOT_DISTANCE_DEGREES = 360 # needs to be measured, how many rolls is each "cube" on the field
 RETURN_SPEED = 40
 MAX_RETRIES = 2
+
+red_cube_ctr = 0
+green_cube_ctr = 0
 
 # PORTS
 motor_gripper = Motor(Ports.PORT6)
@@ -23,10 +26,10 @@ optical_sensor = Optical(Ports.PORT12)
 touch_sensor = Touchled(Ports.PORT11)
 
 # ALL in degrees, test dummy vals, distance from 0
-SLOT_BLUE_DEG = 950
-SLOT_RED_DEG = 300
-SLOT_GREEN_DEG = 100
-DIST_TO_HARVESTING_SITE = 1300
+SLOT_BLUE_DEG = 1900
+SLOT_RED_DEG = 1080
+SLOT_GREEN_DEG = 420
+DIST_TO_HARVESTING_SITE = 2320
 
 # ----------------- SETUP (already given) -----------------
 def setup():
@@ -166,11 +169,68 @@ def set_motor_torque(motor, torque_percent):
 
 
 
+# sensor fail ?
+
+def check_sensor():
+    # runs basic checks for both sensors
+
+    dist = get_distance()
+    color = get_color()
+
+    if dist < 0:
+        print("distance sensor fault")
+        return recover_sensor("distance")
+    if color == "none":
+        return recover_sensor("color")
+    return True
+
+# tries recovery for distance and color sensor.
+# if fail is detected, reinitializes the port thus renitializes the sensor
+# checks again to see if it works. (this is quite hard coded but i feel like
+# it should work...)
+def recover_sensor(sensor_type):
+    print('reinitializing sensor...')
+    set_led("purple")
+    time.sleep(0.2)
+
+    try:
+        if sensor_type == "distance":
+            from vex import Distance, Ports
+            global distance_sensor
+
+            # reinitializing distance sensor
+            distance_sensor = Distance(Ports.PORT4)
+            time.sleep(0.3)
+
+            if get_distance() > 0:
+                print("distance sensor restored")
+                set_led("green")
+                return True
+
+        elif sensor_type == "color":
+            from vex import Optical, Ports
+            global optical_sensor
+            optical_sensor = Optical(Ports.PORT12)
+            optical_sensor.set_light(100)
+            time.sleep(0.3)
+
+            if get_color() != "none":
+                print("color sensor restored")
+                #set_led("green")
+                return True
+
+    except Exception as e:
+        print('[recovery] reinit failed:')
+
+    print(' sensor still offline')
+    #set_led("red")
+    return False
 
 
-
-
-
+def has_cube(threshold=40):
+    # is the cube inside the gripper?
+    d = get_distance()
+    return 0 < d < threshold
 
 
 # # --------- Movement ---------
@@ -188,44 +248,89 @@ def set_motor_torque(motor, torque_percent):
 #     stop_motor(motor_4)
 
 
-
-# --------- Gripper ---------
-def grab_cube():
-    print("Grabbing cube...")
-    start_time = time.time()
-    delta_time = 0
-    success = True
-    while get_distance() > 14:
-        print("retrieving cube")
-        print(get_distance())
-        spin_motor(motor_gripper, -GRAB_SPEED)
-        delta_time = time.time() - start_time
-        time.sleep(0.07)
-        if delta_time > 6:  # timeout after 6 seconds
-            print("Timeout reached while grabbing cube.")
-            if get_distance() < 25: # tbd deal with error handling
-                success = True
-            else:
-                success = False
-            break
-    spin_motor(motor_gripper, 0)
-    print("FINISHED GRABBING, SUCCESS:")
-    print(success)
-    return success
-    # think about error handling ######################
-
-
-
 def release_gripper():
     print("moving gripper all the way in front")
     start_time = time.time()
     delta_time = 0
-    while delta_time < 2.5:
+    while delta_time < 3.5:
         spin_motor(motor_gripper, GRAB_SPEED)
         delta_time = time.time() - start_time
     # move all the way to the maximum
+    
     spin_motor(motor_gripper, 0)
+    set_motor_torque(motor_gripper, 80)
+
     print("Gripper moved to end pos")
+
+
+# --------- Gripper ---------
+# def grab_cube():
+#     print("Grabbing cube...")
+#     start_time = time.time()
+#     delta_time = 0
+#     success = True
+#     while get_distance() > 14:
+#         print("retrieving cube")
+#         print(get_distance())
+#         set_motor_torque(motor_gripper, 0)
+#         spin_motor(motor_gripper, -GRAB_SPEED)
+#         delta_time = time.time() - start_time
+#         time.sleep(0.1)
+#         if delta_time > 3.5:  # timeout after 6 seconds
+#             print("Timeout reached while grabbing cube.")
+#             if get_distance() < 25: # tbd deal with error handling
+#                 success = True
+#             else:
+#                 success = False
+#             break
+#     spin_motor(motor_gripper, 0)
+#     print("FINISHED GRABBING, SUCCESS:")
+#     print(success)
+#     return success
+#     # think about error handling ######################
+def grab_cube(max_retries=2, timeout=3.5):
+    """
+    grabs -> not successful -> retries -> recovers
+    how it notices this: timeout or no reduction in distance sensor
+    """
+
+    print("starting grab")
+    for attempt in range(1, max_retries + 1):
+        if attempt >= max_retries:
+            print("last attempt")
+            spin_motor(motor_trolley,-100)
+            time.sleep(0.25)
+            spin_motor(motor_trolley,0)
+        set_led("yellow")
+        start = time.time()
+        success = False
+
+        while time.time() - start < timeout:
+            dist = get_distance()
+            spin_motor(motor_gripper, -GRAB_SPEED)
+            if 0 < dist < 25:
+                success = True
+                break
+            time.sleep(0.05)
+
+        stop_motor(motor_gripper)
+        if success and has_cube():
+            print('cube successfully grabbed at attempt )')
+            print(attempt)
+            #set_led("green")
+            return True
+
+        print('attempt  failed, retry')
+        print(attempt)
+        release_gripper()
+        time.sleep(0.2)
+
+    print("all attempts faield, skipping cube")
+    set_led("purple")
+    safe_stop_all()
+    return False
+
+
 
 
 
@@ -244,12 +349,13 @@ def release_cube():
    # print("Gripper moved to end pos")
     
     open_thumb()
-    time.sleep(0.3)
+    time.sleep(0.4)
     print("ejecting cube")
-    spin_motor_to_position(motor_ejecter,-500,-100)
-    wait(500, MSEC)
+    spin_motor_to_position(motor_ejecter,-320,-80)
+    wait(300, MSEC)
     print("ejected cube")
     spin_motor_to_position(motor_ejecter,0,100)
+
 
 def grab_with_retry():
     for attempt in range(1, MAX_RETRIES + 1):
@@ -265,28 +371,29 @@ def grab_with_retry():
     print("All grab attempts failed. Skipping cube.")
     return False
 
+
 def open_thumb():
     print("Opening thumb...")
-    set_motor_torque(motor_thumb, 0)
+    #set_motor_torque(motor_thumb, 0)
     start_time = time.time()
     delta_time = 0
-    while delta_time < 0.24:
-        spin_motor(motor_thumb, 60)
+    while delta_time < 0.28:
+        spin_motor(motor_thumb, 85)
         delta_time = time.time() - start_time
     spin_motor(motor_thumb, 0)
+    set_motor_torque(motor_thumb, 90)
 
 
 def close_thumb():
-
     print("Closing thumb...")
     start_time = time.time()
     delta_time = 0
+    set_motor_torque(motor_thumb, 0)
     while delta_time < 1:
         spin_motor(motor_thumb, -100)
         delta_time = time.time() - start_time
     set_motor_torque(motor_thumb, -100)
     
-
 
 
 def return_to_start():
@@ -301,9 +408,25 @@ def return_to_start():
 def place_cube(color, absolute_pos):
     print("Placing cube:")
     print(color)
+    
     if color == "green":
+        global green_cube_ctr
+        green_cube_ctr += 1
+        if green_cube_ctr >= 4:
+    
+            global SLOT_GREEN_DEG
+            SLOT_GREEN_DEG-= 320
+            green_cube_ctr = -4
         spin_motor_to_position(motor_trolley, -SLOT_GREEN_DEG, 100)
     elif color == "red":
+
+        global red_cube_ctr
+        red_cube_ctr += 1
+        if red_cube_ctr >= 4:
+        
+            global SLOT_RED_DEG 
+            SLOT_RED_DEG -= 320
+            red_cube_ctr =-4
         spin_motor_to_position(motor_trolley, -SLOT_RED_DEG, 100)
     elif color == "blue":
         spin_motor_to_position(motor_trolley, -SLOT_BLUE_DEG, 100)
@@ -314,6 +437,12 @@ def place_cube(color, absolute_pos):
     
     release_cube()
     wait(300, MSEC)
+
+def safe_stop_all():
+    # stops all critical motors
+    stop_motor(motor_gripper)
+    stop_motor(motor_trolley)
+    stop_motor(motor_ejecter)
 
 def spin_motor_to_position(motor, position_degrees, speed_percent=50):
     """
@@ -329,41 +458,62 @@ def spin_motor_to_position(motor, position_degrees, speed_percent=50):
             motor.spin_to_position(position_degrees, DEGREES, abs(speed_percent), PERCENT)
         except:
             pass
-
+def backup_error_function():
+    print("###############")
+    dist = get_distance()
+    print(dist)
+    if 17< dist <= 30:
+        release_cube()
+        return False
+    return True
+    
+        # cube not there as it should be
 
 # --------- Autonomous ---------
 def autonomous_run():
-    
+    continue_run = False
     setup()
+    #check_sensor()
     print("System ready")
 
     # start from centered at base, arm fully extended
-    absolute_pos = DIST_TO_HARVESTING_SITE
+    
     start_time_run = time.time()
     passed_time = 0
 
-    while passed_time < 600: # tbd more discrete timing
+    while passed_time < 590: # tbd more discrete timing
+        
+        if continue_run:
+            continue_run = False
+            absolute_pos = absolute_pos + 60
+        else:
+            absolute_pos = DIST_TO_HARVESTING_SITE
+
+        set_led("off")
+        open_thumb()
         spin_motor_to_position(motor_trolley, -absolute_pos, 100) # move to mining area
         print("spinned_motor to first pos")
-        mov_step = 75
+        mov_step = 57
         # look for cube
         print("checking for cube...")
 
-        time_out_time = 22
+        time_out_time = 26
         start_time_outtimer = time.time()
         d_t = 0
         success = False
-        while d_t < time_out_time: # add break point
-            spin_motor_to_position(motor_trolley, -absolute_pos - mov_step, 10)
-
+        while absolute_pos < 5750: # limit of wall
             dist = get_distance()
             print("Distance: ")
             print(dist)
 
-            absolute_pos += mov_step
             if 0 < dist < DISTANCE_THRESHOLD:
                 success = True
                 break
+            spin_motor_to_position(motor_trolley, -absolute_pos - mov_step, 100)
+
+            absolute_pos += mov_step
+
+
             d_t = time.time() - start_time_outtimer
         if passed_time >= 590:
             spin_motor(motor_trolley,0)
@@ -373,8 +523,9 @@ def autonomous_run():
                 spin_motor(motor_trolley,100)
                 motor_trolley.set_position(0, DEGREES)
             continue
+
         # move distance so cube is centered
-        spin_motor_to_position(motor_trolley, -absolute_pos - 150, 100) # old -180
+        spin_motor_to_position(motor_trolley, -absolute_pos - 136, 70) # old -180
 
         if passed_time >= 590: # stop timing
             spin_motor(motor_trolley,0)
@@ -389,7 +540,7 @@ def autonomous_run():
             print(color)
             ctr = 0
             
-            if passed_time >= 590: # stop timing
+            if passed_time >= 592: # stop timing
                 spin_motor(motor_trolley,0)
             while ctr < 5:
                 color_test = get_color()
@@ -404,24 +555,40 @@ def autonomous_run():
             #release the gripper immediately after grabbing the cube
 
             release_gripper()
-            close_thumb()
-                
+            if get_distance() < 32:
+                close_thumb()
+            else:
+                open_thumb()
+                break
             if passed_time >= 590: # stop timing
                 spin_motor(motor_trolley,0)
             
             #print(f"Cube detected, color: {color}, Distance: {dist}mm")
+            if not backup_error_function():
+                continue_run = True
+                continue
 
             place_cube(color, absolute_pos)
             set_led("off")
 
         else: # failed
-            release_gripper()
+            #release_gripper()
             print("Failed to grab cube, aborting mission.")
         
         while not bumper_pressed():
             spin_motor(motor_trolley,100)
         motor_trolley.set_position(0, DEGREES)
         passed_time = time.time() - start_time_run
+
+    set_led("purple")
+    safe_stop_all()
+    ctr = 0
+    while ctr < 3:
+        set_led("off")
+        time.sleep(0.3)
+        set_led("purple")
+        time.sleep(0.3)
+        ctr += 1
 
 
 

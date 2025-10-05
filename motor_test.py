@@ -77,8 +77,8 @@ def set_motor_torque(motor, torque_percent):
 
 
 
-MOTOR_1_PORT = Ports.PORT7
-MOTOR_2_PORT = Ports.PORT8
+MOTOR_1_PORT = Ports.PORT8
+MOTOR_2_PORT = Ports.PORT7
 
 # DEVICES
 touch_sensor = None
@@ -98,7 +98,7 @@ if move_motor_1:
     for i in range(30):
         motor_1.set_position(0, DEGREES)
         #motor_2.set_position(0,DEGREES)
-        spin_motor_to_position(motor_1, -980, 40)
+        spin_motor_to_position(motor_1, -5750, 100)
         #spin_motor_to_position(motor_2,80,100)
         time.sleep(0.1)
         spin_motor_to_position(motor_1, 0, 100)
